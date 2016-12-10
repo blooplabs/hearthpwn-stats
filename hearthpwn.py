@@ -6,17 +6,18 @@ class HearthPwnSpider(scrapy.Spider):
     """Spider for grabbing Hearthstone card usage stats from hearthpwn.com"""
 
     name = 'hearthpwn'
+    base_url = 'http://www.hearthpwn.com/'
     start_urls = [
-        ('http://www.hearthpwn.com/cards'
-         '?display=1&filter-dust-cost-op=1&filter-dust-cost-val=0&filter-rarity=32'
+        base_url +
+        ('cards?display=1&filter-dust-cost-op=1&filter-dust-cost-val=0&filter-rarity=32'
          '&filter-show-standard=y')
     ]
     # download_delay = 0.5
 
     def parse(self, response):
         """Issue a dummy request; hearthpwn doesn't respect url filter on first load"""
-        yield scrapy.Request(('http://www.hearthpwn.com/cards'
-                              '?display=1&filter-dust-cost-op=1&filter-dust-cost-val=0'
+        yield scrapy.Request(self.base_url +
+                             ('cards?display=1&filter-dust-cost-op=1&filter-dust-cost-val=0'
                               '&filter-rarity=32&filter-show-standard=y'),
                              callback=self.parse_listing)
 
@@ -27,13 +28,12 @@ class HearthPwnSpider(scrapy.Spider):
         for card in response.css('table.listing tbody a[href*="cards"]::attr(href)'):
             card_url = response.urljoin(card.extract())
             yield scrapy.Request(card_url, callback=self.parse_card)
+            # break # debug
 
-        # [debug] scrape one card
-        """
-        card = response.css('table.listing tbody a[href*='cards']::attr(href)')
-        card_url = response.urljoin(card.extract()[0])
-        yield scrapy.Request(card_url, callback=self.parse_card)
-        """
+        # parse the next page (if it exists)
+        next_page_links = response.css('li.b-pagination-item a[rel*="next"]::attr(href)').extract()
+        if len(next_page_links) > 0:
+            yield scrapy.Request(self.base_url + next_page_links[0], callback=self.parse_listing)
 
     def parse_card(self, response):
         """Parse the card details page"""
